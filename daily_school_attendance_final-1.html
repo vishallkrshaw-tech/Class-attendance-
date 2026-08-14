@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111827">
+<title>Daily School Attendance</title>
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;min-height:100vh;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  background:linear-gradient(145deg,#0f172a,#1e293b 55%,#334155);color:#f8fafc;padding:22px 14px;
+}
+.wrap{max-width:520px;margin:auto}
+.hero{padding:18px 4px 22px}
+.badge{display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border-radius:999px;background:#ffffff14;border:1px solid #ffffff20;color:#cbd5e1;font-size:13px}
+h1{font-size:30px;line-height:1.15;margin:14px 0 7px}
+.subtitle{margin:0;color:#cbd5e1}
+.card{
+ background:#ffffff;color:#0f172a;border-radius:24px;padding:20px;margin:14px 0;
+ box-shadow:0 18px 45px #0004;
+}
+.status{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px}
+.status strong{font-size:18px}.open{color:#047857}.closed{color:#b91c1c}
+.timer{font-size:13px;color:#64748b}
+label{display:block;font-weight:700;margin-bottom:7px}
+input{
+ width:100%;padding:14px 15px;border:1px solid #dbe2ea;border-radius:14px;
+ font-size:16px;outline:none;background:#f8fafc;
+}
+input:focus{border-color:#64748b;box-shadow:0 0 0 3px #64748b22}
+.buttons{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+button{
+ border:0;border-radius:15px;padding:14px 10px;font-weight:750;font-size:15px;cursor:pointer;
+ transition:.15s transform,.15s opacity;
+}
+button:active{transform:scale(.98)}
+.yes{background:#dcfce7;color:#166534}.no{background:#fee2e2;color:#991b1b}
+.msg{min-height:22px;color:#64748b;font-size:14px;margin:10px 2px 0}
+.result-head{display:flex;justify-content:space-between;align-items:end;gap:10px}
+.result-head h2{margin:0;font-size:20px}.date{font-size:12px;color:#64748b}
+.counts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
+.count{padding:14px;border-radius:16px}.count b{font-size:25px;display:block}.count span{font-size:13px}
+.ybox{background:#ecfdf5;color:#065f46}.nbox{background:#fff1f2;color:#9f1239}
+.bar{height:12px;background:#e5e7eb;border-radius:99px;overflow:hidden}.fill{height:100%;background:#16a34a;width:0%;transition:.25s}
+.people{margin-top:14px}.person{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eef2f7;font-size:14px}
+.person:last-child{border-bottom:0}.tag{font-weight:800}.tag.y{color:#047857}.tag.n{color:#be123c}
+.note{font-size:12px;color:#64748b;line-height:1.5;margin-top:15px}
+.lock{padding:13px 14px;background:#f8fafc;border-radius:14px;color:#475569;font-size:14px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="hero">
+    <div class="badge">📚 Daily Attendance</div>
+    <h1>Will you come to school today?</h1>
+    <p class="subtitle">Please mark your attendance between <b>5:00 AM and 8:00 AM.</b></p>
+  </section>
+
+  <section class="card">
+    <div class="status">
+      <div><strong id="statusText">Checking...</strong></div>
+      <div class="timer" id="timer"></div>
+    </div>
+
+    <div id="voteArea">
+      <label for="name">Your name</label>
+      <input id="name" autocomplete="name" placeholder="Enter your name">
+      <div class="buttons">
+        <button class="yes" onclick="vote('YES')">✅ YES — I will come</button>
+        <button class="no" onclick="vote('NO')">❌ NO — I will not come</button>
+      </div>
+      <div class="msg" id="msg"></div>
+    </div>
+
+    <div id="closedArea" class="lock hidden"></div>
+  </section>
+
+  <section class="card">
+    <div class="result-head">
+      <h2>📊 Today's Result</h2>
+      <div class="date" id="date"></div>
+    </div>
+    <div class="counts">
+      <div class="count ybox"><b id="yc">0</b><span>YES — I will come</span></div>
+      <div class="count nbox"><b id="nc">0</b><span>NO — I will not come</span></div>
+    </div>
+    <div class="bar"><div id="fill" class="fill"></div></div>
+    <div class="people" id="people"></div>
+    <div class="note">Results remain visible after voting closes. A fresh attendance list starts automatically each day.</div>
+  </section>
+</div>
+
+<script>
+const TZ='Asia/Kolkata';
+function parts(){
+ const p=new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date());
+ const o={};p.forEach(x=>o[x.type]=x.value);return o;
+}
+function dayKey(){const p=parts();return `${p.year}-${p.month}-${p.day}`;}
+function minutes(){const p=parts();return +p.hour*60 + +p.minute;}
+function isOpen(){return minutes()>=300 && minutes()<480;}
+function data(){return JSON.parse(localStorage.getItem('attendance-'+dayKey())||'[]');}
+function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
+function render(){
+ const p=parts(), m=minutes(), open=isOpen(), d=data(), y=d.filter(x=>x.v==='YES'), n=d.filter(x=>x.v==='NO');
+ document.getElementById('date').textContent=`${p.year}-${p.month}-${p.day}`;
+ document.getElementById('statusText').textContent=open?'Voting is OPEN':'Voting is CLOSED';
+ document.getElementById('statusText').className=open?'open':'closed';
+ document.getElementById('timer').textContent=open?'Closes at 8:00 AM':'Opens daily at 5:00 AM';
+ document.getElementById('voteArea').classList.toggle('hidden',!open);
+ document.getElementById('closedArea').classList.toggle('hidden',open);
+ document.getElementById('closedArea').textContent=m<300?'Voting opens at 5:00 AM.':'Voting is closed for today. A fresh attendance list will open tomorrow at 5:00 AM.';
+ document.getElementById('yc').textContent=y.length; document.getElementById('nc').textContent=n.length;
+ document.getElementById('fill').style.width=(d.length?y.length/d.length*100:0)+'%';
+ document.getElementById('people').innerHTML=d.length?d.map(x=>`<div class="person"><span>👤 ${esc(x.name)}</span><span class="tag ${x.v==='YES'?'y':'n'}">${x.v==='YES'?'YES':'NO'}</span></div>`).join(''):'<div class="note">No responses yet.</div>';
+}
+function vote(v){
+ if(!isOpen())return;
+ const name=document.getElementById('name').value.trim();
+ const msg=document.getElementById('msg');
+ if(!name){msg.textContent='Please enter your name first.';return;}
+ let d=data();
+ if(d.some(x=>x.name.toLowerCase()===name.toLowerCase())){msg.textContent='This name has already voted today.';return;}
+ d.push({name,v});localStorage.setItem('attendance-'+dayKey(),JSON.stringify(d));
+ document.getElementById('name').value='';msg.textContent='Your vote has been recorded.';
+ render();
+}
+render();setInterval(render,30000);
+</script>
+</body>
+</html>
